@@ -1,0 +1,207 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: {{ .Release.Name }}-manager-role
+rules:
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["prometheuses","servicemonitors","prometheusrules","podmonitors"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["extensions", "apps", "batch" ]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["" ]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "delete", "patch", "list", "update", "watch"]
+- apiGroups: ["extensions", "apps" ]
+  resources: ["deployments/status"]
+  verbs: ["get", "patch", "update", "list"]
+- apiGroups: ["core", ""]
+  resources: ["services"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["core", ""]
+  resources: ["secrets"]
+  verbs: ["create", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["core", ""]
+  resources: ["services/status"]
+  verbs: ["get", "patch", "update", "list"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["extensions" ]
+  resources: ["ingresses/status"]
+  verbs: ["get", "patch", "update", "list"]
+- apiGroups: [autoscaling.k8s.io]
+  resources: ["verticalpodautoscalers"]
+  verbs: ["get", "create", "delete", "update", "list", "watch"]
+- apiGroups: ["argoproj.io"]
+  resources: ["rollouts"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch", "create", "patch"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: {{ .Release.Name }}-proxy-role
+rules:
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["tokenreviews"]
+  verbs: ["create"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["subjectaccessreviews"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: {{ .Release.Name }}-metrics-reader
+rules:
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-leader-election-role
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps/status"]
+  verbs: ["get", "update", "patch", "list"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-alloy-management
+  namespace: {{ .Values.namespaces.tracesNamespace.name }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps/status"]
+  verbs: ["get", "update", "patch", "list"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "list"]
+- apiGroups: ["core", ""]
+  resources: ["secrets"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["core", ""]
+  resources: ["services"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+{{- if .Values.grafanacloud.configmap }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-loki-fluentd-configmap-creation
+  namespace: {{ .Values.grafanacloud.configmap.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "delete", "patch", "list", "update", "watch"]
+  resourceNames:
+  - {{ .Values.grafanacloud.configmap.name }}
+- apiGroups: [""]
+  resources: ["configmaps/status"]
+  verbs: ["get", "update", "patch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+    name: {{ .Release.Name }}-loki-fluentd-configmap-creation
+    namespace: {{ .Values.grafanacloud.configmap.namespace }}
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: {{ .Release.Name }}-loki-fluentd-configmap-creation
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+    name: {{ .Release.Name }}-leader-election-rolebinding
+    namespace: {{ .Release.Namespace }}
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: {{ .Release.Name }}-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+    name: {{ .Release.Name }}-alloy-management
+    namespace: {{ .Values.namespaces.tracesNamespace.name }}
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: {{ .Release.Name }}-alloy-management
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    name: {{ .Release.Name }}-manager-rolebinding
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: {{ .Release.Name }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    name: {{ .Release.Name }}-proxy-rolebinding
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: {{ .Release.Name }}-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}

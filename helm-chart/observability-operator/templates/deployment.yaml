@@ -1,0 +1,91 @@
+apiVersion: {{ include "deployment.apiVersion" $ }}
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    chart: "{{ .Chart.Name }}"
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+      annotations:
+        {{ if $.Values.roleARN }}
+        iam.amazonaws.com/role: {{ $.Values.roleARN | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}
+      automountServiceAccountToken: true
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.pullPolicy }}
+        args:
+          - -cluster-name={{ .Values.clusterName }}
+          - -cluster-region={{ .Values.region }}
+          {{- if .Values.clusterDomain }}
+          - -cluster-domain={{ .Values.clusterDomain }}
+          {{- end }}
+          {{- with .Values.filtering.excludeLabels }}
+          - -exclude-apps-label={{ join "," . }}
+          {{- end }}
+          {{- with .Values.filtering.excludeNamespaces }}
+          - -exclude-namespaces-name={{ join "," . }}
+          {{- end }}
+          {{- with .Values.exclusionLabelSelectors.workload }}
+          - -exclude-workload-selector={{ join "," . }}
+          {{- end }}
+          {{- with .Values.exclusionLabelSelectors.namespace }}
+          - -exclude-namespace-selector={{ join "," . }}
+          {{- end }}
+          {{- if and .Values.prometheusDockerImage.registry .Values.prometheusDockerImage.repository .Values.prometheusDockerImage.tag }}
+          - -prometheus-docker-image={{ .Values.prometheusDockerImage.registry }}/{{ .Values.prometheusDockerImage.repository }}
+          - -prometheus-docker-tag={{ .Values.prometheusDockerImage.tag }}
+          {{- end }}
+          - -metrics-remote-write-to-grafana-cloud={{ .Values.enableGrafanaCloud }}
+          - -enable-vpa={{ .Values.enableVpa }}
+          - -prometheus-namespace={{ .Values.namespaces.prometheusNamespace.name }}
+          {{- with .Values.prometheusNodeSelectorTarget }}
+          - -prometheus-node-selector-target={{ . }}
+          {{- end }}
+          - -traces-namespace={{ .Values.namespaces.tracesNamespace.name }}
+          - -grafana-cloud-client-use-cache={{ .Values.grafanacloud.client.useCache }}
+          - -grafana-cloud-metrics-credentials={{ .Values.credentials.grafana_cloud_metrics_token.secretName }}
+          {{- if .Values.grafanacloud.configmap }}
+          - -logs-fluentd-loki-configmap-namespace={{ .Values.grafanacloud.configmap.namespace }}
+          - -logs-fluentd-loki-configmap-name={{ .Values.grafanacloud.configmap.name }}
+          - -logs-fluentd-loki-configmap-key={{ .Values.grafanacloud.configmap.lokikey }}
+          {{- end }}
+          {{- with .Values.prometheus.priorityClassName }}
+          - -prometheus-pod-priority-classname={{ . }}
+          {{- end }}
+          - -prometheus-service-account-name={{ .Values.prometheus.serviceAccount.name | default (printf "%s-prometheus" .Release.Name) }}
+          {{- $config := .Values.prometheus.extraScrapingConfiguration }}
+          {{- if and $config $config.monitoringTarget $config.monitoringTarget.name }}
+          - -prometheus-monitoring-target-name={{ $config.monitoringTarget.name }}
+          {{- end }}
+          {{- $config := .Values.prometheus }}
+          {{- if and $config $config.externalLabels }}
+          - -prometheus-extra-external-labels={{ .Values.prometheus.externalLabels }}
+          {{- end }}
+        env:
+          - name: GRAFANA_CLOUD_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.credentials.GRAFANA_CLOUD_TOKEN.secretName }}
+                key: {{ .Values.credentials.GRAFANA_CLOUD_TOKEN.secretKey }}
+          - name: GRAFANA_CLOUD_TRACES_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.credentials.GRAFANA_CLOUD_TRACES_TOKEN.secretName }}
+                key: {{ .Values.credentials.GRAFANA_CLOUD_TRACES_TOKEN.secretKey }}
+        ports:
+        - containerPort: {{ .Values.service.internalPort }}
+          name: prometheus
+        resources:
+{{ toYaml .Values.resources | indent 12 }}

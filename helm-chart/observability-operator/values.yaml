@@ -1,0 +1,125 @@
+# Default values for observability-operator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+replicaCount: 1
+image:
+  registry: ghcr.io
+  repository: adevinta/observability-operator
+  tag: latest
+
+pullPolicy: IfNotPresent
+region: eu-west-1
+clusterName: CHANGEME
+
+# Domain name of the cluster.
+# Used for:
+# - annotations and label keys to configure and maintain
+#   relations between objects managed by this operator
+# - determine the internal URL Prometheus statefulsets should expose
+clusterDomain: CHANGEME
+
+roleARN: CHANGEME
+enableGrafanaCloud: true
+enableVpa: false
+
+prometheus:
+# The service account to be used by the Prometheus instances, which provides the necessary permissions to scrape workloads
+# if name is empty, the name will be dynamically generated based on the chart release name. If the user has already an existing sa then create:false and name must be filled.
+  serviceAccount:
+    name: "prometheus-tenant"
+  # Priority class name to be used by the Prometheus instances
+  priorityClassName: ""
+# externalLabels: "key1:value1,key2:value2"
+
+  # Prometheus configuration for additional scraping targets.
+  # extraScrapingConfiguration:
+    # monitoringTarget:
+    #   name: "cluster-ingress-prometheus-metrics"
+
+# To enable metrics collection, the following values must be set.
+# If any of these are missing, the operator will not fetch metrics.
+prometheusDockerImage:
+  registry: "quay.io"
+  repository: "prometheus/prometheus"
+  tag: "v2.43.0"
+
+# Defines which nodes can host Prometheus instances
+# prometheusNodeSelectorTarget: "CHANGEME"
+
+service:
+  internalPort: 8080
+
+enableSelfVpa: true
+
+# Credentials holds the references to the Secret objects that hold the
+# credentials required to interact with GrafanaCloud
+credentials:
+  # GRAFANA_CLOUD_TOKEN is an expected Environment Variable to be set
+  # in the operator holding an API key for the Grafana.com API, so it
+  # can discover existing stacks and access values
+  GRAFANA_CLOUD_TOKEN:
+    # secretName - name of the secret that holds API key for grafana.com
+    # and the token for the Cloud Access policy that allows to write
+    # traces to GrafanaCloud
+    secretName: "observability-operator-grafana-cloud-credentials"
+    # secretKey - the key inside the secret holding the value
+    secretKey: "grafana-cloud-api-key"
+  # GRAFANA_CLOUD_TRACES_TOKEN is an expected Environment Variable to
+  # be set in the operator holding a Cloud Access Policy token to
+  # write the traces endpoint of any stack in the organization
+  GRAFANA_CLOUD_TRACES_TOKEN:
+    # secretName - name of the secret that holds API key for grafana.com
+    # and the token for the Cloud Access policy that allows to write
+    # traces to GrafanaCloud
+    secretName: "observability-operator-grafana-cloud-credentials"
+    # secretKey - the key inside the secret holding the value
+    secretKey: "grafana-cloud-traces-token"
+  grafana_cloud_metrics_token:
+    # secretName - name of the secret that holds API that
+    # allows to write prometheus data to GrafanaCloud, stored in the
+    # Prometheus namespace
+    secretName: "observability-operator-grafana-cloud-credentials"
+    # secretKey - the key inside the secret holding the value
+    # TODO: still hardcoded in codebase
+    secretKey: "grafana-cloud-api-key"
+
+# Namespaces to be used by the operator and its deployments
+namespaces:
+  # tracesNamespace - the namespace to hold Alloy workers to act as
+  # per-tenant OTel collectors for traces
+  tracesNamespace:
+    # name - name of the namespace
+    name: "observability"
+  # prometheusNamespace - the namespace to hold Prometheus per-tenant
+  # to scrape workloads and forward them to the destination
+  prometheusNamespace:
+    # name - name of the namespace
+    name: "platform-services"
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+grafanacloud:
+  configmap: {}
+  # namespace: platform-services
+  # name: grafana-cloud-config
+  # lokikey: loki
+  client:
+    useCache: false
+
+filtering:
+  excludeLabels: []
+  excludeNamespaces: []
+
+# Use as described here https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors
+# to select the objects that should be filtered out by the operator, multiple selectors can be used and will be combined
+# All selectors must be matched for the object to be skipped
+exclusionLabelSelectors:
+  # list of string selectors to match against deployments, replicasets, statefulsets, daemonsets, etc
+  workload: []
+  # list of string selectors to match against namespaces
+  namespace: []

@@ -1,0 +1,136 @@
+logging {
+	level  = "info"
+	format = "json"
+}
+
+tracing {
+	write_to = [otelcol.processor.transform.default.input] //TODO send to our grafana stack ?
+}
+
+// TODO Metrics
+
+otelcol.receiver.otlp "default" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		traces = [otelcol.processor.tail_sampling.default.input]
+	}
+}
+
+// Tail sampling (WARNING this is a stateful component)
+// https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.processor.tail_sampling/
+otelcol.processor.tail_sampling "default" {
+	// Total wait time from the start of a trace before making a sampling decision.
+	// Note that smaller time periods can potentially cause a decision to be made
+	// before the end of a trace has occurred.
+	// We keep the default value (to be optimized later if necessary)
+	decision_wait = "30s"
+
+	// Determines the buffer size of the trace delete channel which is composed of trace ids.
+	// Increasing the number will increase the memory usage of the component
+	// while decreasing the number will lower the maximum amount of traces kept in memory
+	// We keep the default value (to be optimized later if necessary)
+	num_traces = 50000
+
+	// Determines the initial slice sizing of the current batch.
+	// A larger number will use more memory but be more efficient when adding traces to the batch
+	// We keep the default value (to be optimized later if necessary)
+	expected_new_traces_per_sec = 0
+
+	// We keep traces in error status
+	policy {
+		name = "sample-error-traces"
+		type = "status_code"
+
+		status_code {
+			status_codes = ["ERROR"]
+		}
+	}
+
+	// We keep a subset/sample of successful traces
+	policy {
+		name = "sample-probabilistic-successful"
+		type = "and"
+
+		and {
+			and_sub_policy {
+				name = "successful-traces"
+				type = "status_code"
+
+				status_code {
+					status_codes = ["OK", "UNSET"]
+				}
+			}
+
+			and_sub_policy {
+				name = "sample-probabilistic"
+				type = "probabilistic"
+
+				probabilistic {
+					sampling_percentage = 10
+				}
+			}
+		}
+	}
+
+	output {
+		traces = [otelcol.processor.transform.default.input]
+	}
+}
+
+// This processor set resource attributes on spans
+otelcol.processor.transform "default" {
+	error_mode = "ignore"
+	{{- if .CustomResourceAttributes }}
+
+	trace_statements {
+		context    = "resource"
+		statements = [
+		{{- range $key, $value := .CustomResourceAttributes }}
+			`set(attributes["{{ $key }}"], "{{ $value }}")`,
+		{{- end }}
+		]
+	}
+	{{- end }}
+	{{- if not .CustomResourceAttributes }}
+	// No CustomResourceAttributes set
+	{{- end }}
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+		logs    = [otelcol.processor.batch.default.input]
+		traces  = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.batch "default" {
+	output {
+		traces = [
+		{{- range $i, $value := .Credentials }}
+			otelcol.exporter.otlphttp.default_{{$i}}.input,
+		{{- end}}
+		]
+	}
+}
+
+{{- range $i, $value := .Credentials }}
+
+otelcol.auth.basic "credentials_{{$i}}" {
+	username = {{ $value.User }}
+	password = {{ $value.Password }}
+}
+
+otelcol.exporter.otlphttp "default_{{$i}}" {
+	client {
+		endpoint = {{ $value.Endpoint }}
+		auth     = otelcol.auth.basic.credentials_{{$i}}.handler
+	}
+}
+
+{{- end }}

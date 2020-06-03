@@ -1,0 +1,21 @@
+name: 'Manage stale branches'
+on:
+  schedule:
+    # Run every monday at 10 am
+    - cron: "0 10 * * 1"
+
+jobs:
+  manage-stale-branches:
+    name: "Manage stale branches"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Manage Stale Branches"
+        id: manage-stale-branches
+        uses: crazy-matt/manage-stale-branches@1.1.1
+        with:
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          stale_older_than: 60
+          suggestions_older_than: 30
+          excluded_branches: |
+            origin/main
+            origin/master

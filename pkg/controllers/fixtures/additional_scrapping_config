@@ -1,0 +1,61 @@
+- job_name: "prometheus-scraper"
+  static_configs:
+  - targets: ["localhost:9090"]
+- job_name: prometheusesNamespace/prometheus-podmonitorNamespace-monitoring-target/0
+  honor_labels: true
+  kubernetes_sd_configs:
+  - role: service
+    namespaces:
+      names:
+      - prometheusesNamespace
+  scrape_interval: 30s
+  metrics_path: /federate
+  params:
+    match[]:
+    - '{federate="true", namespace="podmonitorNamespace"}'
+  relabel_configs:
+  - action: keep
+    source_labels:
+    - __meta_kubernetes_service_label_release
+    regex: ^.*-(ingress|cluster)-metrics$
+  - source_labels:
+    - __meta_kubernetes_endpoint_address_target_kind
+    - __meta_kubernetes_endpoint_address_target_name
+    separator: ;
+    regex: Node;(.*)
+    replacement: ${1}
+    target_label: node
+  - source_labels:
+    - __meta_kubernetes_endpoint_address_target_kind
+    - __meta_kubernetes_endpoint_address_target_name
+    separator: ;
+    regex: Pod;(.*)
+    replacement: ${1}
+    target_label: pod
+  - source_labels:
+    - __meta_kubernetes_namespace
+    target_label: namespace
+  - source_labels:
+    - __meta_kubernetes_service_name
+    target_label: service
+  - source_labels:
+    - __meta_kubernetes_pod_name
+    target_label: pod
+  - source_labels:
+    - __meta_kubernetes_service_name
+    target_label: job
+    replacement: ${1}
+  - regex: pod
+    action: labeldrop
+  - regex: node
+    action: labeldrop
+  - regex: namespace
+    action: labeldrop
+  metric_relabel_configs:
+  - regex: federate
+    action: labeldrop
+  - regex: __replica__
+    action: labeldrop
+  - regex: ^prometheus$
+    action: labeldrop
+  enable_http2: false

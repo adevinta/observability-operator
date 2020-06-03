@@ -1,0 +1,3 @@
+# Adding this CODEOWNERS file and adding another branch protection
+# ` Require review from Code Owners ` we will ensure that other members can create branches (which means they can merge PRs) but only merge PRs that has been approved by Adevinta.
+* @adevinta/cloud-platform-runtime

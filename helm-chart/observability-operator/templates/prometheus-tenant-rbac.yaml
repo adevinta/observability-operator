@@ -1,0 +1,40 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-prometheus
+  labels:
+    app: {{ .Release.Name }}-prometheus
+rules:
+# This permission are not in the kube-prometheus repo
+# they're grabbed from https://github.com/prometheus/prometheus/blob/master/documentation/examples/rbac-setup.yml
+- apiGroups: [""]
+  resources:
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources:
+  - endpointslices
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    name: {{ .Release.Name }}-prometheus-scraping-rolebinding
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: {{ .Release.Name }}-prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus-tenant
+  namespace: {{ .Values.namespaces.prometheusNamespace.name }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-tenant
+  namespace: {{ .Values.namespaces.prometheusNamespace.name }}

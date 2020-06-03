@@ -1,0 +1,13 @@
+{{ if $.Values.enableSelfVpa }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRef:
+    kind: Deployment
+    name: {{ .Release.Name }}
+  updatePolicy:
+    updateMode: Auto
+{{ end }}

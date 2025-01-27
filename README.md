@@ -8,6 +8,8 @@
 
 # Observability Operator
 
+![Simplified operator diagram](docs/images/simplified-diagram.png)
+
 Observability Operator is a Kubernetes Operator that manages and
 orchestrates the infrastructure to collect and relay Observability
 data to several destinations in multi-teant Kubernetes clusters.

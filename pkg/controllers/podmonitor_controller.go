@@ -112,9 +112,7 @@ func (r *PodMonitorReconciler) deletePrometheusIfNotRequired(monitor monitoringv
 	// TODO: Theoretically we can use client.MatchingFields() as listOpts to match annotations, so we would
 	// not need the for loop afterwards
 	if err := r.List(ctx, monitors, client.InNamespace(monitor.Namespace)); err != nil {
-		if err != nil {
-			return err
-		}
+		return err
 	}
 	for _, m := range monitors.Items {
 		if isGrafanaCloudStorageEnabled(m.ObjectMeta) && !isPodMonitorBeingDeleted(*m) {

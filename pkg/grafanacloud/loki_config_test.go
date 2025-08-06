@@ -103,7 +103,7 @@ func TestFluentdConfigTemplateCorrectness(t *testing.T) {
 				Name:   "my-cluster",
 				Region: "eu-fake-1",
 			},
-			Stacks: map[string][]lokiCredentials{},
+			Stacks: []namespaceCredentials{},
 		}
 		var buffer bytes.Buffer
 		err = tpl.Execute(&buffer, config)
@@ -116,11 +116,14 @@ func TestFluentdConfigTemplateCorrectness(t *testing.T) {
 				Name:   "my-cluster",
 				Region: "eu-fake-1",
 			},
-			Stacks: map[string][]lokiCredentials{
-				namespace: {
-					{
-						URL:    "http://grafana.net/loki",
-						UserID: 123,
+			Stacks: []namespaceCredentials{
+				{
+					Namespace: namespace,
+					Credentials: []lokiCredentials{
+						{
+							URL:    "http://grafana.net/loki",
+							UserID: 123,
+						},
 					},
 				},
 			},
@@ -233,15 +236,18 @@ func TestFluentdConfigTemplateCorrectness(t *testing.T) {
 				Name:   "my-cluster",
 				Region: "eu-fake-1",
 			},
-			Stacks: map[string][]lokiCredentials{
-				"my-namespace": {
-					{
-						URL:    "http://grafana.net/loki",
-						UserID: 123,
-					},
-					{
-						URL:    "http://grafana.net/loki",
-						UserID: 456,
+			Stacks: []namespaceCredentials{
+				{
+					Namespace: "my-namespace",
+					Credentials: []lokiCredentials{
+						{
+							URL:    "http://grafana.net/loki",
+							UserID: 123,
+						},
+						{
+							URL:    "http://grafana.net/loki",
+							UserID: 456,
+						},
 					},
 				},
 			},
@@ -418,17 +424,23 @@ func TestFluentdConfigTemplateCorrectness(t *testing.T) {
 				Name:   "my-cluster",
 				Region: "eu-fake-1",
 			},
-			Stacks: map[string][]lokiCredentials{
-				"my-namespace": {
-					{
-						URL:    "http://grafana.net/loki",
-						UserID: 123,
+			Stacks: []namespaceCredentials{
+				{
+					Namespace: "my-namespace",
+					Credentials: []lokiCredentials{
+						{
+							URL:    "http://grafana.net/loki",
+							UserID: 123,
+						},
 					},
 				},
-				"other-namespace": []lokiCredentials{
-					{
-						URL:    "http://grafana.net/loki",
-						UserID: 456,
+				{
+					Namespace: "other-namespace",
+					Credentials: []lokiCredentials{
+						{
+							URL:    "http://grafana.net/loki",
+							UserID: 456,
+						},
 					},
 				},
 			},

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -224,6 +225,8 @@ func lookupGrafanaStacks(k8sclient client.Client, namespace string) ([]string, e
 	for _, part := range split {
 		trimmed = append(trimmed, strings.TrimSpace(part))
 	}
+
+	slices.Sort(trimmed)
 
 	return trimmed, nil
 

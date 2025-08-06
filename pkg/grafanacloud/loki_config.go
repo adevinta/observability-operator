@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"slices"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -152,6 +153,21 @@ func (r *GrafanaCloudConfigUpdater) createFluentDConfigmap(ctx context.Context) 
 	}
 	r.Log.Info("found loki configurations", "namespaceCount", len(lokiConfigs))
 
+	nsCreds := []namespaceCredentials{}
+	for namespace, credentials := range lokiConfigs {
+		sort.Slice(credentials, func(i, j int) bool {
+			return credentials[i].UserID < credentials[j].UserID
+		})
+		nsCreds = append(nsCreds, namespaceCredentials{
+			Namespace:   namespace,
+			Credentials: credentials,
+		})
+	}
+
+	sort.Slice(nsCreds, func(i, j int) bool {
+		return nsCreds[i].Namespace < nsCreds[j].Namespace
+	})
+
 	tpl := template.New("loki-config")
 	tpl, err = tpl.Parse(lokiFluentDTemplate)
 	if err != nil {
@@ -164,7 +180,7 @@ func (r *GrafanaCloudConfigUpdater) createFluentDConfigmap(ctx context.Context) 
 			Name:   r.ClusterName,
 			Region: r.ClusterRegion,
 		},
-		Stacks: lokiConfigs,
+		Stacks: nsCreds,
 	}); err != nil {
 		r.Log.Error(err, "failed to generate loki configuration")
 		return
@@ -189,7 +205,12 @@ func (r *GrafanaCloudConfigUpdater) createFluentDConfigmap(ctx context.Context) 
 
 type lokiOptions struct {
 	Cluster clusterDetails
-	Stacks  map[string][]lokiCredentials
+	Stacks  []namespaceCredentials
+}
+
+type namespaceCredentials struct {
+	Namespace   string
+	Credentials []lokiCredentials
 }
 
 type clusterDetails struct {

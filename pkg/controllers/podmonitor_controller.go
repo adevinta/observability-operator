@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -553,6 +555,14 @@ func (r *PodMonitorReconciler) updatePrometheusObjectDef(monitor monitoringv1.Po
 			return err
 		}
 	}
+
+	slices.SortFunc(remoteWriteConfig, func(a, b monitoringv1.RemoteWriteSpec) int {
+		r := cmp.Compare(a.URL, b.URL)
+		if r != 0 {
+			return r
+		}
+		return cmp.Compare(a.BasicAuth.Username.Key, b.BasicAuth.Username.Key)
+	})
 	var alertingConfig *monitoringv1.AlertingSpec
 	if alertingConfigMap, ok, _ := r.getNamespacedNameObjectFromAnnotation(monitor, Config.alertManagerAnnotationKey); ok {
 		alertingConfig, err = r.alertManagerConfigFromConfigMap(*alertingConfigMap)

@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: "Manage Stale Branches"
         id: manage-stale-branches
-        uses: crazy-matt/manage-stale-branches@1.1.1
+        uses: crazy-matt/manage-stale-branches@v3.0.1
         with:
           gh_token: ${{ secrets.GITHUB_TOKEN }}
           stale_older_than: 60

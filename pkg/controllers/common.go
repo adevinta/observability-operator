@@ -88,7 +88,16 @@ func newPrometheusObjectDef(namespace, prometheusNamespace string) *monitoringv1
 			Name:      namespace,
 			Namespace: prometheusNamespace,
 		},
-		Spec: monitoringv1.PrometheusSpec{},
+		Spec: monitoringv1.PrometheusSpec{
+			// Add unique pod labels to prevent service ownership conflicts
+			// This ensures each Prometheus instance gets its own prometheus-operated service
+			// instead of all instances sharing and fighting over the same service
+			PodMetadata: &monitoringv1.EmbeddedObjectMetadata{
+				Labels: map[string]string{
+					"app.kubernetes.io/instance": namespace,
+				},
+			},
+		},
 	}
 }
 

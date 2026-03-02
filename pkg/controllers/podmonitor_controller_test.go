@@ -180,7 +180,8 @@ func createPrometheusObject(namespace string, name string) *monitoringv1.Prometh
 			},
 			PodMetadata: &monitoringv1.EmbeddedObjectMetadata{
 				Labels: map[string]string{
-					Config.accountLabelKey: name,
+					Config.accountLabelKey:        name,
+					"app.kubernetes.io/instance": name,
 				},
 			},
 			ServiceMonitorSelector: &metav1.LabelSelector{
@@ -1310,7 +1311,8 @@ func TestPodMonitorDeFederateNamespace(t *testing.T) {
 			},
 			PodMetadata: &monitoringv1.EmbeddedObjectMetadata{
 				Labels: map[string]string{
-					Config.accountLabelKey: "podmonitorNamespace",
+					Config.accountLabelKey:        "podmonitorNamespace",
+					"app.kubernetes.io/instance": "podmonitorNamespace",
 				},
 			},
 			ServiceMonitorSelector: &metav1.LabelSelector{
@@ -1930,4 +1932,87 @@ func TestPodMonitorWithAlertManager(t *testing.T) {
 		}
 		assert.Equal(t, *expectedPrometheus.Spec.Alerting, *prometheuses.Items[0].Spec.Alerting)
 	})
+}
+
+func TestPrometheusInstancesHaveUniqueLabelsToPreventServiceConflicts(t *testing.T) {
+	// This test verifies the fix for prometheus-operated service ownership conflicts
+	// where multiple Prometheus instances in the same namespace would all try to
+	// claim ownership of the same service, causing multiple ownerReferences.
+	//
+	// The solution is to add unique app.kubernetes.io/instance labels per tenant
+	// so each Prometheus instance gets its own service.
+
+	grafanaCloudClient := mockGrafanaCloudClient{
+		GetStackFunc: func(tenant string) (*grafanacloud.Stack, error) {
+			stack := grafanacloud.Stack{
+				PromURL: "https://prometheus-us-central1.grafana.net",
+			}
+			return &stack, nil
+		},
+	}
+
+	promNamespace := "prometheusNamespace"
+	secret := createSecretStub(promNamespace)
+
+	// Create two PodMonitors in different namespaces
+	podmonitor1 := createPodMonitor("tenant-a", "podmonitor1")
+	podmonitor1.Annotations = map[string]string{
+		Config.storageAnnotationKey: "grafanacloud",
+	}
+	namespace1 := newNamespace(podmonitor1.Namespace)
+	namespace1.SetAnnotations(map[string]string{
+		Config.stackNameAnnotationKey: "adevintaruntime",
+	})
+
+	podmonitor2 := createPodMonitor("tenant-b", "podmonitor2")
+	podmonitor2.Annotations = map[string]string{
+		Config.storageAnnotationKey: "grafanacloud",
+	}
+	namespace2 := newNamespace(podmonitor2.Namespace)
+	namespace2.SetAnnotations(map[string]string{
+		Config.stackNameAnnotationKey: "adevintaruntime",
+	})
+
+	reconciler := newDefaultTestPodMonitorReconciler(t, secret, podmonitor1, podmonitor2, namespace1, namespace2)
+	reconciler.EnableMetricsRemoteWrite = true
+	reconciler.PrometheusNamespace = promNamespace
+	reconciler.GrafanaCloudClient = &grafanaCloudClient
+
+	// Reconcile both PodMonitors
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: podmonitor1.Namespace, Name: podmonitor1.Name},
+	})
+	require.NoError(t, err)
+
+	_, err = reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: podmonitor2.Namespace, Name: podmonitor2.Name},
+	})
+	require.NoError(t, err)
+
+	// Verify both Prometheus instances were created
+	prometheuses := &monitoringv1.PrometheusList{}
+	require.NoError(t, reconciler.Client.List(context.Background(), prometheuses))
+	require.Len(t, prometheuses.Items, 2, "Expected 2 Prometheus instances")
+
+	// Verify each Prometheus has a unique app.kubernetes.io/instance label
+	instanceLabels := make(map[string]bool)
+	for _, prom := range prometheuses.Items {
+		require.NotNil(t, prom.Spec.PodMetadata, "PodMetadata should not be nil")
+		require.NotNil(t, prom.Spec.PodMetadata.Labels, "PodMetadata.Labels should not be nil")
+
+		instanceLabel, exists := prom.Spec.PodMetadata.Labels["app.kubernetes.io/instance"]
+		require.True(t, exists, "app.kubernetes.io/instance label should exist on Prometheus %s", prom.Name)
+
+		// Verify the instance label matches the tenant namespace
+		assert.Equal(t, prom.Name, instanceLabel,
+			"app.kubernetes.io/instance should match Prometheus name (tenant namespace)")
+
+		// Verify uniqueness
+		assert.False(t, instanceLabels[instanceLabel],
+			"app.kubernetes.io/instance label should be unique, but %s was duplicated", instanceLabel)
+		instanceLabels[instanceLabel] = true
+	}
+
+	// Verify we have 2 unique instance labels
+	assert.Len(t, instanceLabels, 2, "Should have 2 unique instance labels")
 }

@@ -605,7 +605,8 @@ func (r *PodMonitorReconciler) updatePrometheusObjectDef(monitor monitoringv1.Po
 		ExternalLabels:     mergedLabels,
 		PodMetadata: &monitoringv1.EmbeddedObjectMetadata{
 			Labels: map[string]string{
-				Config.accountLabelKey: monitor.Namespace,
+				Config.accountLabelKey:        monitor.Namespace,
+				"app.kubernetes.io/instance": monitor.Namespace, // Unique label to prevent service ownership conflicts
 			},
 		},
 		PodMonitorNamespaceSelector: &metav1.LabelSelector{},
